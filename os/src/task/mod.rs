@@ -194,9 +194,5 @@ pub fn record_syscall(syscall_id: usize) {
 pub fn get_syscall_count(syscall_id: usize) -> Option<usize> {
     let inner = TASK_MANAGER.inner.exclusive_access();
     let current = inner.current_task;
-    if inner.tasks[current].syscall_counts.get(&syscall_id).is_none(){
-        return Some(0);
-    }else{
-        return Some(*inner.tasks[current].syscall_counts.get(&syscall_id).unwrap());
-    }
+    Some(*inner.tasks[current].syscall_counts.get(&syscall_id).unwrap_or(&0))
 }

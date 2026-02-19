@@ -51,10 +51,7 @@ fn trace_fn_1(_id: usize, _data: usize) -> isize{
     return 0;
 }
 fn trace_fn_2(_id: usize) -> isize{
-    match get_syscall_count(_id) {
-        Some(count) => count as isize,
-        None => -1,
-    }
+    get_syscall_count(_id).unwrap_or(0) as isize
 }
 
 pub fn sys_trace(trace_request: usize, _id: usize, _data: usize) -> isize {
