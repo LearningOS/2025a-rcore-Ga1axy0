@@ -22,8 +22,9 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-/// Maximum syscall id tracked per task.
-pub const MAX_SYSCALL_NUM: usize = 512;
+/// syscall id tracked per task.
+extern crate alloc;
+use alloc::collections::BTreeMap as HashMap;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -53,11 +54,14 @@ lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
+        let mut tasks: [TaskControlBlock; MAX_APP_NUM] = core::array::from_fn(|_| {
+        TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
-            syscall_counts: [0; MAX_SYSCALL_NUM],
-        }; MAX_APP_NUM];
+            syscall_counts: HashMap::new(),
+    }
+});
+
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
@@ -175,21 +179,24 @@ pub fn exit_current_and_run_next() {
 
 /// Record a syscall for the current task.
 pub fn record_syscall(syscall_id: usize) {
-    if syscall_id >= MAX_SYSCALL_NUM {
-        return;
-    }
     let mut inner = TASK_MANAGER.inner.exclusive_access();
     let current = inner.current_task;
-    inner.tasks[current].syscall_counts[syscall_id] =
-        inner.tasks[current].syscall_counts[syscall_id].saturating_add(1);
+    let syscall_counts = &mut inner.tasks[current].syscall_counts;
+    let next = syscall_counts
+        .get(&syscall_id)
+        .copied()
+        .unwrap_or(0)
+        .saturating_add(1);
+    syscall_counts.insert(syscall_id, next);
 }
 
 /// Get the syscall count for the current task.
 pub fn get_syscall_count(syscall_id: usize) -> Option<usize> {
-    if syscall_id >= MAX_SYSCALL_NUM {
-        return None;
-    }
     let inner = TASK_MANAGER.inner.exclusive_access();
     let current = inner.current_task;
-    Some(inner.tasks[current].syscall_counts[syscall_id])
+    if inner.tasks[current].syscall_counts.get(&syscall_id).is_none(){
+        return Some(0);
+    }else{
+        return Some(*inner.tasks[current].syscall_counts.get(&syscall_id).unwrap());
+    }
 }

@@ -1,16 +1,18 @@
 //! Types related to task management
 
-use super::{TaskContext, MAX_SYSCALL_NUM};
+extern crate alloc;
+use super::{TaskContext};
+use alloc::collections::BTreeMap as HashMap;
 
 /// The task control block (TCB) of a task.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct TaskControlBlock {
     /// The task status in it's lifecycle
     pub task_status: TaskStatus,
     /// The task context
     pub task_cx: TaskContext,
     /// Per-task syscall counters indexed by syscall id
-    pub syscall_counts: [usize; MAX_SYSCALL_NUM],
+    pub syscall_counts: HashMap<usize, usize>,
 }
 
 /// The status of a task
