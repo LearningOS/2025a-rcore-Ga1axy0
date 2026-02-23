@@ -262,6 +262,69 @@ impl MemorySet {
             false
         }
     }
+    /// map an anonymous area with given permission, return true if success
+    pub fn mmap_anonymous(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+    ) -> bool {
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            if self.page_table.translate(vpn).is_some() {
+                return false;
+            }
+        }
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            let page_start: VirtAddr = vpn.into();
+            let page_end: VirtAddr = (usize::from(page_start) + PAGE_SIZE).into();
+            self.push(
+                MapArea::new(page_start, page_end, MapType::Framed, permission),
+                None,
+            );
+        }
+        true
+    }
+    /// unmap an anonymous area, return true if success
+    pub fn munmap_anonymous(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            let Some(pte) = self.page_table.translate(vpn) else {
+                return false;
+            };
+            if !pte.flags().contains(PTEFlags::U) {
+                return false;
+            }
+            let mut found = false;
+            for area in self.areas.iter() {
+                if area.vpn_range.get_start().0 == vpn.0
+                    && area.vpn_range.get_end().0 == vpn.0 + 1
+                    && area.map_type == MapType::Framed
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return false;
+            }
+        }
+
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            let Some(pos) = self.areas.iter().position(|area| {
+                area.vpn_range.get_start().0 == vpn.0
+                    && area.vpn_range.get_end().0 == vpn.0 + 1
+                    && area.map_type == MapType::Framed
+            }) else {
+                return false;
+            };
+            let mut area = self.areas.remove(pos);
+            area.unmap_one(&mut self.page_table, vpn);
+        }
+        true
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {

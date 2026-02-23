@@ -6,6 +6,9 @@ use crate::mm::{
 };
 use crate::trap::{trap_handler, TrapContext};
 
+extern crate alloc;
+use alloc::collections::BTreeMap as HashMap;
+
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
     /// Save task context
@@ -28,6 +31,9 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Per-task syscall counters indexed by syscall id
+    pub syscall_counts: HashMap<usize, usize>,
 }
 
 impl TaskControlBlock {
@@ -63,6 +69,7 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            syscall_counts: HashMap::new(),
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
@@ -95,6 +102,14 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+    /// map an anonymous area with given permission, return true if success
+    pub fn mmap(&mut self, start: VirtAddr, end: VirtAddr, perm: MapPermission) -> bool {
+        self.memory_set.mmap_anonymous(start, end, perm)
+    }
+    /// unmap an area. return true if success
+    pub fn munmap(&mut self, start: VirtAddr, end: VirtAddr) -> bool {
+        self.memory_set.munmap_anonymous(start, end)
     }
 }
 

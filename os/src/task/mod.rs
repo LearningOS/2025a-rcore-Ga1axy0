@@ -14,6 +14,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use crate::mm::{MapPermission, VirtAddr};
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
@@ -120,7 +121,7 @@ impl TaskManager {
         inner.tasks[inner.current_task].get_user_token()
     }
 
-    /// Get the current 'Running' task's trap contexts.
+            /// /// Get the current 'Running' task's trap contexts.
     fn get_current_trap_cx(&self) -> &'static mut TrapContext {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].get_trap_cx()
@@ -131,6 +132,23 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let cur = inner.current_task;
         inner.tasks[cur].change_program_brk(size)
+    }
+    /// Change the location of the program break. Return None if failed.
+    pub fn mmap_current_task(
+        &self,
+        start: VirtAddr,
+        end: VirtAddr,
+        perm: MapPermission,
+    ) -> bool {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].mmap(start, end, perm)
+    }
+    /// Unmap an area. Return None if failed.
+    pub fn munmap_current_task(&self, start: VirtAddr, end: VirtAddr) -> bool {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].munmap(start, end)
     }
 
     /// Switch current `Running` task to the task we have found,
@@ -201,4 +219,32 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+/// Change the location of the program break. Return None if failed.
+pub fn mmap_current_task(start: VirtAddr, end: VirtAddr, perm: MapPermission) -> bool {
+    TASK_MANAGER.mmap_current_task(start, end, perm)
+}
+/// Unmap an area. Return None if failed.
+pub fn munmap_current_task(start: VirtAddr, end: VirtAddr) -> bool {
+    TASK_MANAGER.munmap_current_task(start, end)
+}
+
+/// Record a syscall for the current task.
+pub fn record_syscall(syscall_id: usize) {
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    let syscall_counts = &mut inner.tasks[current].syscall_counts;
+    let next = syscall_counts
+        .get(&syscall_id)
+        .copied()
+        .unwrap_or(0)
+        .saturating_add(1);
+    syscall_counts.insert(syscall_id, next);
+}
+
+/// Get the syscall count for the current task.
+pub fn get_syscall_count(syscall_id: usize) -> Option<usize> {
+    let inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    Some(*inner.tasks[current].syscall_counts.get(&syscall_id).unwrap_or(&0))
 }
