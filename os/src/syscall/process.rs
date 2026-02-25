@@ -8,8 +8,8 @@ use crate::{
     config::PAGE_SIZE_BITS,
     loader::get_app_data_by_name,
     mm::{
-        translated_refmut, translated_str, translated_byte_buffer, MapPermission, PageTable,
-        PTEFlags, VirtAddr,
+        translated_refmut, translated_str, translated_byte_buffer, MapPermission,
+        VirtAddr,
     },
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
@@ -195,19 +195,32 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+pub fn sys_spawn(path: *const u8) -> isize {
+    trace!("kernel:pid[{}] sys_spawn", current_task().unwrap().pid.0);
+
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    let Some(data) = get_app_data_by_name(path.as_str()) else {
+        return -1;
+    };
+
+    let parent = current_task().unwrap();
+    let child = parent.fork();
+    let pid = child.pid.0 as isize;
+    child.exec(data);
+    add_task(child);
+    pid
 }
+
 
 // YOUR JOB: Set task priority.
 pub fn sys_set_priority(_prio: isize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+    trace!("kernel:pid[{}] sys_set_priority", current_task().unwrap().pid.0);
+    if _prio < 2 {
+        return -1;
+    }
+
+    let current_task = current_task().unwrap();
+    current_task.set_priority(_prio as usize);
+    _prio
 }
