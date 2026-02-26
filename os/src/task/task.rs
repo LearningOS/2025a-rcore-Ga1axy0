@@ -10,8 +10,9 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
+pub const BIG_STRIDE: usize = 0xff;
 
-/// Task control block structure
+/// Task control block structure``
 ///
 /// Directly save the contents that will not change during running
 pub struct TaskControlBlock {
@@ -35,6 +36,12 @@ impl TaskControlBlock {
     pub fn get_user_token(&self) -> usize {
         let inner = self.inner_exclusive_access();
         inner.memory_set.token()
+    }
+    /// Set the priority of the process.
+    pub fn set_priority(&self, prio: usize) {
+        let mut inner = self.inner_exclusive_access();
+        inner.priority = prio;
+        inner.pass = BIG_STRIDE / prio;
     }
 }
 
@@ -71,6 +78,15 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Priority of the process.
+    pub priority: usize,
+
+    /// stride represents the times of being scheduled.
+    pub stride: usize,
+
+    /// Pass represents value used for stride scheduling
+    pub pass: usize,
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +151,9 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    priority: 16,
+                    stride: 0,
+                    pass: BIG_STRIDE/16,
                 })
             },
         };
@@ -216,6 +235,9 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    priority: parent_inner.priority,
+                    stride: parent_inner.stride,
+                    pass: parent_inner.pass,
                 })
             },
         });
