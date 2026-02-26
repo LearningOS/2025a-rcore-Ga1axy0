@@ -22,6 +22,8 @@ mod switch;
 #[allow(rustdoc::private_intra_doc_links)]
 mod task;
 
+use crate::loader::get_app_data_by_name;
+use crate::mm::{MapPermission, VirtAddr};
 use crate::fs::{open_file, OpenFlags};
 use alloc::sync::Arc;
 pub use context::TaskContext;
@@ -53,6 +55,16 @@ pub fn suspend_current_and_run_next() {
     add_task(task);
     // jump to scheduling cycle
     schedule(task_cx_ptr);
+}
+
+/// Map an anonymous area in current task with given permission.
+pub fn mmap_current_task(start: VirtAddr, end: VirtAddr, perm: MapPermission) -> bool {
+    current_task().unwrap().mmap(start, end, perm)
+}
+
+/// Unmap an anonymous area in current task.
+pub fn munmap_current_task(start: VirtAddr, end: VirtAddr) -> bool {
+    current_task().unwrap().munmap(start, end)
 }
 
 /// pid of usertests app in make run TEST=1
