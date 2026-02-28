@@ -160,6 +160,10 @@ pub fn exit_current_and_run_next(exit_code: i32) {
         process_inner.fd_table.clear();
         // remove all tasks
         process_inner.tasks.clear();
+    } else {
+        let mut process_inner = process.inner_exclusive_access();
+        process_inner.mutex_detector.clear_thread(tid);
+        process_inner.semaphore_detector.clear_thread(tid);
     }
     drop(process);
     // we do not have to save task context
